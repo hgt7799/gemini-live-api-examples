@@ -30,3 +30,20 @@ python main.py
 ```
 
 You should see **"Connected to Gemini. Start speaking!"** — talk into your mic and Gemini will respond with audio. Press `Ctrl+C` to quit.
+
+## YouTube Real-time Translation
+
+A CLI script to translate any YouTube video's audio in real-time.
+
+### Run Translation Script
+
+```bash
+python translate.py --url "https://www.youtube.com/watch?v=YOUR_VIDEO_ID" --target es
+```
+
+- `--url`: The YouTube video URL you want to translate.
+- `--target`: The target translation language code (e.g., `es` for Spanish, `fr` for French, `pl` for Polish). Defaults to `es`.
+- `--original-volume`: Volume level for playing the original speaker's audio in the background (float from `0.0` to `1.0`, defaults to `0.08` or 8% volume). Set to `0.0` to disable background playback.
+
+The script will stream the audio, play the original speaker softly in the background, print both the source and translated transcripts with their language codes (e.g., `[Source (en)]` / `[Translation (es)]`), and play the translated audio stream in real-time.
+
