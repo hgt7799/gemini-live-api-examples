@@ -148,6 +148,14 @@ class GeminiLiveAPI {
     this.temperature = 1.0; // Default temperature
     this.inputAudioTranscription = false;
     this.outputAudioTranscription = false;
+
+    // === Translation mode (Live Translate model) ===
+    // useTranslation=true 이면 번역 전용 setup 을 보냄.
+    // 번역 모델은 systemInstruction / tools / speechConfig 를 받지 않음.
+    this.useTranslation = true; // [테스트] 항상 번역 모드. UI 붙인 뒤 script.js 에서 제어 예정
+    this.targetLanguageCode = "en"; // 번역 도착 언어 (BCP-47). 예: en, ja, zh-Hans
+    this.echoTargetLanguage = true; // 입력이 이미 도착 언어면 그대로 따라 말함
+
     this.enableFunctionCalls = false;
     this.functions = [];
     this.functionsMap = {};
@@ -226,6 +234,22 @@ class GeminiLiveAPI {
   setOutputAudioTranscription(enabled) {
     console.log("setting output audio transcription: ", enabled);
     this.outputAudioTranscription = enabled;
+  }
+
+  // === Translation mode setters ===
+  setUseTranslation(enabled) {
+    console.log("setting useTranslation: ", enabled);
+    this.useTranslation = enabled;
+  }
+
+  setTargetLanguageCode(code) {
+    console.log("setting targetLanguageCode: ", code);
+    this.targetLanguageCode = code;
+  }
+
+  setEchoTargetLanguage(enabled) {
+    console.log("setting echoTargetLanguage: ", enabled);
+    this.echoTargetLanguage = enabled;
   }
 
   setEnableFunctionCalls(enabled) {
@@ -323,6 +347,34 @@ class GeminiLiveAPI {
   }
 
   sendInitialSetupMessages() {
+    // === 번역 모드: 번역 전용 setup 만 보내고 종료 ===
+    // 공식 문서 기준 — 번역 모델은 generationConfig 안에
+    // responseModalities + input/outputAudioTranscription + translationConfig 만 받음.
+    // systemInstruction / tools / speechConfig 를 넣으면 충돌함.
+    if (this.useTranslation) {
+      const translationSetupMessage = {
+        setup: {
+          model: this.modelUri,
+          generationConfig: {
+            responseModalities: ["AUDIO"],
+            translationConfig: {
+              targetLanguageCode: this.targetLanguageCode,
+              echoTargetLanguage: this.echoTargetLanguage,
+            },
+          },
+          // input/outputAudioTranscription 은 generationConfig 밖,
+          // setup 바로 아래에 와야 함 (안에 넣으면 1007 Unknown name 에러).
+          inputAudioTranscription: {},
+          outputAudioTranscription: {},
+        },
+      };
+
+      this.lastSetupMessage = translationSetupMessage;
+      console.log("🌐 translationSetupMessage: ", translationSetupMessage);
+      this.sendMessage(translationSetupMessage);
+      return;
+    }
+
     const tools = this.getFunctionDefinitions();
 
     const sessionSetupMessage = {

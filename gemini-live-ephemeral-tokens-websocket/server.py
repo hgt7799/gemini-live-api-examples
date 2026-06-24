@@ -21,6 +21,13 @@ load_dotenv()
 HTTP_PORT = 8000  # Port for HTTP server
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
+# === 번역 설정 (Live Translate) ===
+# 토큰에 번역 모델 + 도착 언어를 박아서 발급한다.
+# 도착 언어를 바꾸려면 TARGET_LANGUAGE_CODE 만 수정하면 됨. (예: "en", "ja", "zh-Hans")
+TRANSLATE_MODEL = "gemini-3.5-live-translate-preview"
+TARGET_LANGUAGE_CODE = "en"   # 한국어로 말하면 영어로 번역
+ECHO_TARGET_LANGUAGE = True    # 입력이 이미 영어면 그대로 따라 말함
+
 # Initialize the Gemini GenAI client
 if not GEMINI_API_KEY:
     print("⚠️ Warning: GEMINI_API_KEY not found in environment. Please set it in .env or as an environment variable.")
@@ -31,25 +38,31 @@ else:
 
 
 async def get_ephemeral_token(request):
-    """Generates an ephemeral token for the Gemini Live API."""
+    """Generates an ephemeral token for the Gemini Live API (translation mode)."""
     try:
-        # Optional: Allow client to pass an API key
-        # data = await request.json()
-        # api_key = data.get("api_key")
-        # if api_key:
-        #     local_client = genai.Client(api_key=api_key, http_options={'api_version': 'v1alpha'})
-        # else:
-        #     local_client = client
-
         now = datetime.datetime.now(tz=datetime.timezone.utc)
         expire_time = now + datetime.timedelta(minutes=30)
-        
-        # Create an ephemeral token
+
+        # Create an ephemeral token LOCKED to the translation model + target language.
+        # 공식 문서(Live Translate) 기준 — live_connect_constraints 안에
+        # translation_config 를 넣어 토큰에 번역 설정을 고정한다.
         token = client.auth_tokens.create(
             config={
                 "uses": 1,
                 "expire_time": expire_time.isoformat(),
                 "new_session_expire_time": (now + datetime.timedelta(minutes=1)).isoformat(),
+                "live_connect_constraints": {
+                    "model": TRANSLATE_MODEL,
+                    "config": {
+                        "response_modalities": ["AUDIO"],
+                        "input_audio_transcription": {},
+                        "output_audio_transcription": {},
+                        "translation_config": {
+                            "target_language_code": TARGET_LANGUAGE_CODE,
+                            "echo_target_language": ECHO_TARGET_LANGUAGE,
+                        },
+                    },
+                },
                 "http_options": {"api_version": "v1alpha"},
             }
         )
@@ -102,10 +115,10 @@ async def serve_static_file(request):
 async def main():
     """Starts the HTTP server."""
     app = web.Application()
-    
+
     # API endpoints
     app.router.add_post("/api/token", get_ephemeral_token)
-    
+
     # Static files
     app.router.add_get("/", serve_static_file)
     app.router.add_get("/{path:.*}", serve_static_file)
@@ -114,7 +127,7 @@ async def main():
     await runner.setup()
     site = web.TCPSite(runner, "0.0.0.0", HTTP_PORT)
     await site.start()
-    
+
     print(f"""
 ╔════════════════════════════════════════════════════════════╗
 ║     Gemini Live API Server (Ephemeral Token Approach)     ║
@@ -122,15 +135,16 @@ async def main():
 ║                                                            ║
 ║  📱 Web Interface: http://localhost:{HTTP_PORT:<5}                   ║
 ║  🔑 API Endpoint:  POST /api/token                         ║
+║  🌐 Translation:   ko → {TARGET_LANGUAGE_CODE:<5}                            ║
 ║                                                            ║
 ║  Instructions:                                             ║
-║  1. Ensure GOOGLE_API_KEY is set in your environment       ║
+║  1. Ensure GEMINI_API_KEY is set in your environment       ║
 ║  2. Open http://localhost:{HTTP_PORT} in your browser              ║
 ║  3. Click Connect to start!                                ║
 ║                                                            ║
 ╚════════════════════════════════════════════════════════════╝
 """)
-    
+
     # Keep the server running
     while True:
         await asyncio.sleep(3600)

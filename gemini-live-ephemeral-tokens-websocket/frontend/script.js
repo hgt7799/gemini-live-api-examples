@@ -241,14 +241,16 @@ function handleMessage(message) {
 
     case MultimodalLiveResponseType.INPUT_TRANSCRIPTION:
       console.log("Input transcription:", message.data);
-      if (!message.data.finished) {
+      // 빈 text 조각(번역 모델이 첫 조각 뒤에 계속 보냄)은 화면에 추가하지 않음
+      if (!message.data.finished && message.data.text) {
         addMessage(message.data.text, "user-transcript", (append = true));
       }
       break;
 
     case MultimodalLiveResponseType.OUTPUT_TRANSCRIPTION:
       console.log("Output transcription:", message.data);
-      if (!message.data.finished) {
+      // 빈 text 조각은 화면에 추가하지 않음
+      if (!message.data.finished && message.data.text) {
         addMessage(message.data.text, "assistant", (append = true));
       }
       break;
