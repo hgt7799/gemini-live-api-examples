@@ -1,321 +1,712 @@
 <!DOCTYPE html>
-<html lang="en">
+<!--
+  라이브 통역 — 라이트 'A · 소프트 카드' v1
+  · script.js가 참조하는 33개 요소 id를 전부 보존했습니다(보이는 6개 + 숨긴 27개).
+  · 동작 로직/기본값은 원본과 동일합니다. 화면만 새로 입혔습니다.
+  · CC 인계용 정리본 — 데모 카드 제거, 빈 화면 안내만 표시.
+-->
+<html lang="ko">
 
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Gemini Live API - Vanilla JS Example</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>라이브 통역 · 한국어 → English</title>
   <style>
     :root {
-      /* Google Brand Colors */
-      --google-blue: #4285f4;
-      --google-red: #db4437;
-      --google-yellow: #f4b400;
-      --google-green: #0f9d58;
+      --bg: #eef0f2;
+      --app: #ffffff;
+      --text: #1c1c1e;
+      --muted: #8a8a8e;
+      --muted-2: #6b7280;
+      --line: #ececec;
+      --line-2: #e5e5ea;
+      --accent: #378add;
+      --accent-strong: #185fa5;
+      --accent-deep: #042c53;
+      --accent-soft: #e6f1fb;
+      --accent-border: #b5d4f4;
+      --ko-card: #f2f2f7;
+      --ko-label: #8a8a8e;
+      --rec: #ff3b30;
+      --radius: 14px;
+      --mic: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 15a4 4 0 0 0 4-4V5a4 4 0 1 0-8 0v6a4 4 0 0 0 4 4z'/%3E%3Cpath d='M6 11a1 1 0 1 0-2 0 8 8 0 0 0 7 7.94V21a1 1 0 1 0 2 0v-2.06A8 8 0 0 0 20 11a1 1 0 1 0-2 0 6 6 0 0 1-12 0z'/%3E%3C/svg%3E");
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      padding: 0;
     }
 
     body {
-      font-family: Arial, sans-serif;
-      transition: all 0.5s ease-in-out;
-    }
-
-    .container {
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Apple SD Gothic Neo", "Pretendard", "Noto Sans KR", system-ui, -apple-system, sans-serif;
+      min-height: 100vh;
+      min-height: 100dvh;
       display: flex;
-      gap: 20px;
+      justify-content: center;
+      -webkit-font-smoothing: antialiased;
     }
 
-    .left-column {
-      flex: 1;
+    .app {
+      width: 100%;
+      max-width: 480px;
+      min-height: 100vh;
+      min-height: 100dvh;
+      background: var(--app);
+      display: flex;
+      flex-direction: column;
+      position: relative;
     }
 
-    .right-column {
+    @media (min-width: 520px) {
+      .app {
+        border-left: 1px solid var(--line);
+        border-right: 1px solid var(--line);
+      }
+    }
+
+    /* ── Header ── */
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 16px 12px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .brand {
       flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .brand-title {
+      font-size: 0.98rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+
+    .direction {
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+
+    .direction span {
+      color: var(--accent-strong);
+    }
+
+    .status-pill {
+      font-size: 0.72rem;
+      color: var(--muted);
+      background: var(--ko-card);
+      padding: 5px 10px;
+      border-radius: 999px;
+      white-space: nowrap;
+    }
+
+    .gear {
+      width: 38px;
+      height: 38px;
+      flex: 0 0 38px;
+      display: grid;
+      place-items: center;
+      border-radius: 11px;
+      background: var(--ko-card);
+      color: var(--muted-2);
+      cursor: pointer;
+      transition: background .15s, color .15s;
+    }
+
+    .gear:hover {
+      background: #e8e8ee;
+      color: var(--text);
+    }
+
+    .gear svg {
+      width: 19px;
+      height: 19px;
+    }
+
+    /* ── Conversation ── */
+    .convo {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 14px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 11px;
+      scroll-behavior: smooth;
+    }
+
+    .empty-state {
+      margin: auto;
+      text-align: center;
+      color: var(--muted);
+      max-width: 250px;
+      line-height: 1.6;
+      font-size: 0.95rem;
+    }
+
+    .empty-state:not(:only-child) {
+      display: none;
+    }
+
+    .empty-state .ico {
+      width: 48px;
+      height: 48px;
+      margin: 0 auto 14px;
+      border-radius: 50%;
+      background: var(--accent-soft);
+      display: grid;
+      place-items: center;
+    }
+
+    .empty-state .ico::before {
+      content: "";
+      width: 22px;
+      height: 22px;
+      background: var(--accent);
+      -webkit-mask: var(--mic) center / contain no-repeat;
+      mask: var(--mic) center / contain no-repeat;
+    }
+
+    /* 메시지 카드 — class명은 script.js가 부여 (assistant / user-transcript / user / system) */
+    .convo>div {
+      max-width: 90%;
+      padding: 9px 13px;
+      border-radius: var(--radius);
+      line-height: 1.4;
+      word-break: break-word;
+      animation: rise .2s ease;
+    }
+
+    @keyframes rise {
+      from {
+        opacity: 0;
+        transform: translateY(5px);
+      }
+    }
+
+    /* 내가 말한 한국어 → 오른쪽, 회색 카드 + '한국어' 라벨 */
+    .user-transcript,
+    .user {
+      align-self: flex-end;
+      background: var(--ko-card);
+      color: var(--text);
+      font-size: 0.98rem;
+      max-width: 88%;
+    }
+
+    .user-transcript::before {
+      content: "한국어";
+      display: block;
+      font-size: 0.7rem;
+      color: var(--ko-label);
+      margin-bottom: 2px;
+    }
+
+    /* 통역된 영어 → 왼쪽, 파란 카드 + 'English' 라벨, 가장 크게 */
+    .assistant {
+      align-self: flex-start;
+      background: var(--accent-soft);
+      color: var(--accent-deep);
+      font-size: 1.22rem;
+      font-weight: 500;
+      letter-spacing: -0.01em;
+    }
+
+    .assistant::before {
+      content: "English";
+      display: block;
+      font-size: 0.7rem;
+      font-weight: 500;
+      color: var(--accent-strong);
+      margin-bottom: 3px;
+      letter-spacing: 0;
+    }
+
+    /* 상태 메시지 → 가운데 작은 알약 */
+    .system {
+      align-self: center;
+      background: var(--ko-card);
+      color: var(--muted);
+      font-size: 0.74rem;
+      padding: 4px 12px;
+      border-radius: 999px;
+      max-width: none;
+    }
+
+    /* ── Footer ── */
+    .footer {
+      border-top: 1px solid var(--line);
+      padding: 13px 16px calc(16px + env(safe-area-inset-bottom));
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 11px;
+    }
+
+    .conn-row {
+      display: flex;
+      gap: 8px;
+      width: 100%;
+    }
+
+    .conn-row button {
+      flex: 1;
+      font: inherit;
+      font-size: 0.88rem;
+      font-weight: 600;
+      padding: 9px 0;
+      border-radius: 10px;
+      cursor: pointer;
+      background: var(--app);
+      transition: background .15s;
+    }
+
+    #connectBtn {
+      color: var(--accent-strong);
+      border: 1px solid var(--accent-border);
+    }
+
+    #connectBtn:hover {
+      background: var(--accent-soft);
+    }
+
+    #disconnectBtn {
+      color: var(--muted-2);
+      border: 1px solid var(--line-2);
+    }
+
+    #disconnectBtn:hover {
+      background: var(--ko-card);
+    }
+
+    .conn-row button:active {
+      transform: translateY(1px);
+    }
+
+    .mic-btn {
+      width: 66px;
+      height: 66px;
+      border-radius: 50%;
+      border: none;
+      cursor: pointer;
+      font-size: 0;
+      /* script.js가 넣는 "Start/Stop Audio" 텍스트는 시각적으로 숨김 */
+      color: transparent;
+      background: var(--accent);
+      display: grid;
+      place-items: center;
+      transition: transform .12s, background .2s;
+    }
+
+    .mic-btn::before {
+      content: "";
+      width: 30px;
+      height: 30px;
+      background: #fff;
+      -webkit-mask: var(--mic) center / contain no-repeat;
+      mask: var(--mic) center / contain no-repeat;
+    }
+
+    .mic-btn:hover {
+      background: #2d78c8;
+    }
+
+    .mic-btn:active {
+      transform: scale(.96);
+    }
+
+    .hint {
+      font-size: 0.78rem;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .hint b {
+      color: var(--accent-strong);
+    }
+
+    /* ── Settings drawer (CSS-only, gear로 토글) ── */
+    .ui-toggle {
+      position: absolute;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .scrim {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, .35);
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity .25s, visibility .25s;
+      z-index: 20;
+      cursor: pointer;
+    }
+
+    .drawer {
+      position: fixed;
+      top: 0;
+      right: 0;
+      height: 100%;
+      width: min(380px, 90vw);
+      background: var(--app);
+      border-left: 1px solid var(--line);
+      transform: translateX(102%);
+      transition: transform .28s cubic-bezier(.4, 0, .2, 1);
+      z-index: 21;
+      overflow-y: auto;
+      padding: 18px 18px calc(28px + env(safe-area-inset-bottom));
+    }
+
+    .ui-toggle:checked~.scrim {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .ui-toggle:checked~.drawer {
+      transform: translateX(0);
+    }
+
+    .drawer-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+
+    .drawer-head h2 {
+      font-size: 1rem;
+      margin: 0;
+    }
+
+    .drawer-close {
+      width: 32px;
+      height: 32px;
+      display: grid;
+      place-items: center;
+      border-radius: 9px;
+      background: var(--ko-card);
+      color: var(--muted-2);
+      cursor: pointer;
+      font-size: 1.1rem;
+      line-height: 1;
+    }
+
+    .drawer fieldset {
+      border: 1px solid var(--line-2);
+      border-radius: 12px;
+      margin: 14px 0 0;
+      padding: 12px 14px 14px;
+    }
+
+    .drawer legend {
+      font-size: 0.78rem;
+      color: var(--accent-strong);
+      padding: 0 6px;
+    }
+
+    .drawer label {
+      display: block;
+      font-size: 0.82rem;
+      color: var(--muted-2);
+      margin: 10px 0 4px;
+    }
+
+    .drawer .check {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 9px 0 0;
+      font-size: 0.85rem;
+    }
+
+    .drawer .check label {
+      margin: 0;
+      color: var(--text);
+    }
+
+    .drawer .check input {
+      margin-top: 3px;
+    }
+
+    .drawer input[type="text"],
+    .drawer input[type="number"],
+    .drawer textarea,
+    .drawer select {
+      width: 100%;
+      font: inherit;
+      font-size: 0.85rem;
+      background: var(--app);
+      color: var(--text);
+      border: 1px solid var(--line-2);
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
+
+    .drawer input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent);
+    }
+
+    .drawer .media-btns {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .drawer .media-btns button {
+      flex: 1;
+      font: inherit;
+      font-size: 0.8rem;
+      padding: 8px 0;
+      background: var(--app);
+      color: var(--text);
+      border: 1px solid var(--line-2);
+      border-radius: 8px;
+      cursor: pointer;
+    }
+
+    .drawer small {
+      color: var(--muted);
+      font-size: 0.72rem;
+      display: block;
+      margin-top: 4px;
+      line-height: 1.4;
+    }
+
+    #videoPreview {
+      width: 100%;
+      border-radius: 10px;
+      margin-top: 10px;
+      background: #000;
     }
 
     #setupJsonDisplay {
-      background-color: #f4f4f4;
+      background: var(--ko-card);
+      border-radius: 8px;
       padding: 10px;
       overflow-x: auto;
       white-space: pre-wrap;
+      font-size: 0.72rem;
+      color: var(--muted-2);
+      max-height: 220px;
     }
 
-    .user-transcript:before {
-      content: "USER SPEECH: ";
-      background-color: var(--google-yellow);
-      color: black;
+    #debugInfo {
+      background: var(--ko-card);
+      border-radius: 8px;
+      padding: 10px;
+      font-size: 0.72rem;
+      color: var(--muted-2);
+      white-space: pre-wrap;
+      margin: 0;
     }
 
-    .user::before {
-      content: "USER: ";
-      background-color: var(--google-green);
-      color: white;
+    button:focus-visible,
+    .gear:focus-visible,
+    input:focus-visible,
+    select:focus-visible,
+    textarea:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
     }
 
-    .assistant:before {
-      content: "GEMINI SPEECH: ";
-      background-color: var(--google-blue);
-      color: white;
-    }
+    @media (prefers-reduced-motion: reduce) {
 
-    .system:before {
-      content: "SYSTEM: ";
-      background-color: var(--google-red);
-      color: white;
+      *,
+      .drawer,
+      .convo>div {
+        animation: none !important;
+        transition: none !important;
+        scroll-behavior: auto;
+      }
     }
   </style>
 </head>
 
 <body>
-  <h1>Gemini Live API - Vanilla JS Example</h1>
-  <p>
-    Vanilla JavaScript implementation with audio, video, and text streaming
-  </p>
+  <input type="checkbox" id="uiSettings" class="ui-toggle" />
 
-  <div class="container">
-    <!-- Left Column: API Configuration -->
-    <div class="left-column">
-      <!-- Connection Setup -->
-      <section>
-        <h2>API Configuration</h2>
+  <!-- ── 메인 화면 ── -->
+  <div class="app">
+    <header class="header">
+      <div class="brand">
+        <div class="brand-title">라이브 통역</div>
+        <div class="direction">한국어 <span>→</span> English</div>
+      </div>
+      <div id="connectionStatus" class="status-pill">Not connected</div>
+      <label for="uiSettings" class="gear" role="button" aria-label="고급 설정 열기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+          stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3" />
+          <path
+            d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+        </svg>
+      </label>
+    </header>
 
-        <!-- Connection Settings -->
-        <details open>
-          <summary>Connection Settings</summary>
-          <p>Connection will be established directly to the Gemini API using an ephemeral token from the backend.</p>
+    <!-- 통역 결과가 들어가는 영역 (id 보존) -->
+    <main id="chatContainer" class="convo">
+      <div class="empty-state">
+        <div class="ico"></div>
+        마이크를 켜고 한국어로 말해 보세요.<br />말하는 즉시 영어로 통역됩니다.
+      </div>
+    </main>
 
-          <div>
-            <label for="model">Model ID:</label><br />
-            <input type="text" id="model" value="gemini-3.5-live-translate-preview" placeholder="Enter model ID" />
-          </div>
-        </details>
-
-        <!-- Gemini Behavior Settings -->
-        <br />
-        <details open>
-          <summary>Gemini Behavior</summary>
-          <div>
-            <label for="systemInstructions">System Instructions:</label><br />
-            <textarea id="systemInstructions" rows="3" cols="50">
-You are a helpful assistant. Be concise and friendly.</textarea>
-          </div>
-
-          <div>
-            <label for="voiceSelect">Voice:</label><br />
-            <select id="voiceSelect">
-              <option value="Puck">Puck (Default)</option>
-              <option value="Charon">Charon</option>
-              <option value="Kore">Kore</option>
-              <option value="Fenrir">Fenrir</option>
-              <option value="Aoede">Aoede</option>
-            </select>
-          </div>
-
-          <div>
-            <label for="temperature">Temperature: <span id="temperatureValue">1.0</span></label><br />
-            <input type="range" id="temperature" min="0.1" max="2.0" step="0.1" value="1.0" />
-            <br />
-            <small>Controls randomness (0.0-2.0]. Higher = more creative/diverse,
-              Lower = more predictable/focused</small>
-          </div>
-
-          <div>
-            <input type="checkbox" id="enableGrounding" />
-            <label for="enableGrounding">Enable Google grounding (Enabling Google grounding will disable
-              custom tools)
-            </label>
-          </div>
-        </details>
-
-        <!-- Custom Tools -->
-        <br />
-        <details>
-          <summary>Custom Tools</summary>
-
-          <div>
-            <input type="checkbox" id="enableAlertTool" checked />
-            <label for="enableAlertTool">Show Alert Box</label>
-            <span> (Display browser alerts) </span>
-          </div>
-
-          <div>
-            <input type="checkbox" id="enableCssStyleTool" checked />
-            <label for="enableCssStyleTool">Add CSS Style</label>
-            <span> (Inject CSS styles into the page) </span>
-          </div>
-        </details>
-
-        <!-- Transcription Settings -->
-        <br />
-        <details>
-          <summary>Transcription Settings</summary>
-          <div>
-            <input type="checkbox" id="enableInputTranscription" checked />
-            <label for="enableInputTranscription">Enable input transcription (your speech)</label>
-          </div>
-
-          <div>
-            <input type="checkbox" id="enableOutputTranscription" checked />
-            <label for="enableOutputTranscription">Enable output transcription (Gemini responses)</label>
-          </div>
-        </details>
-
-        <!-- Activity Detection Settings -->
-        <br />
-        <details>
-          <summary>Activity Detection Settings</summary>
-          <div>
-            <input type="checkbox" id="disableActivityDetection" />
-            <label for="disableActivityDetection">Disable automatic activity detection</label>
-          </div>
-
-          <div>
-            <label for="silenceDuration">Silence duration (ms):</label><br />
-            <input type="number" id="silenceDuration" value="500" min="500" max="10000" step="100" />
-          </div>
-
-          <div>
-            <label for="prefixPadding">Prefix padding (ms):</label><br />
-            <input type="number" id="prefixPadding" value="500" min="0" max="2000" step="100" />
-          </div>
-
-          <div>
-            <label for="endSpeechSensitivity">End of speech sensitivity:</label><br />
-            <select id="endSpeechSensitivity">
-              <option value="END_SENSITIVITY_UNSPECIFIED" selected>
-                Default
-              </option>
-              <option value="END_SENSITIVITY_HIGH">
-                High (quicker cutoff)
-              </option>
-              <option value="END_SENSITIVITY_LOW">Low (longer wait)</option>
-            </select>
-          </div>
-
-          <div>
-            <label for="startSpeechSensitivity">Start of speech sensitivity:</label><br />
-            <select id="startSpeechSensitivity">
-              <option value="START_SENSITIVITY_UNSPECIFIED" selected>
-                Default
-              </option>
-              <option value="START_SENSITIVITY_HIGH">
-                High (quicker detection)
-              </option>
-              <option value="START_SENSITIVITY_LOW">
-                Low (more filtering)
-              </option>
-            </select>
-          </div>
-
-          <div>
-            <label for="activityHandling">Activity Handling:</label><br />
-            <select id="activityHandling">
-              <option value="ACTIVITY_HANDLING_UNSPECIFIED" selected>
-                Default (Interrupts)
-              </option>
-              <option value="START_OF_ACTIVITY_INTERRUPTS">
-                Interrupt (Barge-in)
-              </option>
-              <option value="NO_INTERRUPTION">No Interruption</option>
-            </select>
-          </div>
-        </details>
-
-        <br />
-
-        <div>
-          <button id="connectBtn">Connect</button>
-          <button id="disconnectBtn">Disconnect</button>
-        </div>
-
-        <br />
-
-        <div id="connectionStatus">Not connected</div>
-
-        <br />
-
-        <!-- Setup Message JSON Display -->
-        <details id="setupJsonSection" style="display: none">
-          <summary>
-            Setup Message JSON (raw config sent to Gemini API)
-          </summary>
-          <pre id="setupJsonDisplay"></pre>
-        </details>
-      </section>
-    </div>
-
-    <!-- Right Column: Media and Chat -->
-    <div class="right-column">
-      <!-- Media Controls -->
-      <section>
-        <h2>Media Streaming</h2>
-
-        <div class="container">
-          <div class="left-column">
-            <!-- Device Selectors -->
-            <div style="margin-bottom: 10px">
-              <div style="margin-bottom: 5px">
-                <label for="micSelect">Microphone:</label><br />
-                <select id="micSelect" style="width: 100%; max-width: 300px">
-                  <option value="">Default Microphone</option>
-                </select>
-              </div>
-
-              <div style="margin-bottom: 10px">
-                <label for="cameraSelect">Camera:</label><br />
-                <select id="cameraSelect" style="width: 100%; max-width: 300px">
-                  <option value="">Default Camera</option>
-                </select>
-              </div>
-            </div>
-
-            <div>
-              <button id="startAudioBtn">Start Audio</button>
-              <button id="startVideoBtn">Start Video</button>
-              <button id="startScreenBtn">Share Screen</button>
-            </div>
-
-            <br />
-            <div>
-              <label for="volume">Output volume:</label>
-              <input type="range" id="volume" min="0" max="100" value="80" />
-              <span id="volumeValue">80%</span>
-            </div>
-          </div>
-
-          <div class="right-column">
-            <video id="videoPreview" autoplay playsinline muted hidden width="400"></video>
-          </div>
-        </div>
-      </section>
-
-      <!-- Chat Interface -->
-      <section>
-        <h2>Chat</h2>
-
-        <div id="chatContainer" style="
-              border: 1px solid;
-              height: 300px;
-              overflow-y: auto;
-              padding: 10px;
-            ">
-          <div>Connect to Gemini to start chatting</div>
-        </div>
-        <br />
-        <div>
-          <input type="text" id="chatInput" placeholder="Type a message..." autocomplete="off" />
-          <button id="sendBtn">Send</button>
-        </div>
-      </section>
-
-      <!-- Debug Info -->
-      <section>
-        <h2>Debug Info</h2>
-        <pre id="debugInfo">Ready to connect...</pre>
-      </section>
-    </div>
+    <footer class="footer">
+      <div class="conn-row">
+        <button id="connectBtn">연결</button>
+        <button id="disconnectBtn">종료</button>
+      </div>
+      <button id="startAudioBtn" class="mic-btn" aria-label="마이크 켜기 / 끄기">Start Audio</button>
+      <div class="hint"><b>①</b> 연결한 뒤 &nbsp;<b>②</b> 마이크를 켜고 말하세요</div>
+    </footer>
   </div>
 
-  <!-- Load libraries -->
+  <!-- ── 닫기용 스크림 + 고급 설정 서랍 ── -->
+  <label for="uiSettings" class="scrim" aria-hidden="true"></label>
+
+  <aside class="drawer" aria-label="고급 설정">
+    <div class="drawer-head">
+      <h2>고급 설정</h2>
+      <label for="uiSettings" class="drawer-close" role="button" aria-label="닫기">✕</label>
+    </div>
+    <small>일반 사용에는 손댈 필요 없는 항목들입니다. 통역 동작에 쓰이는 설정이라 화면에서만 숨겨 두었습니다.</small>
+
+    <fieldset>
+      <legend>연결</legend>
+      <label for="model">모델 ID</label>
+      <input type="text" id="model" value="gemini-3.5-live-translate-preview" placeholder="모델 ID" />
+      <label for="systemInstructions">시스템 지시문</label>
+      <textarea id="systemInstructions" rows="3">You are a helpful assistant. Be concise and friendly.</textarea>
+      <div class="check">
+        <input type="checkbox" id="enableGrounding" />
+        <label for="enableGrounding">Google 그라운딩 사용 (켜면 커스텀 도구 비활성화)</label>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>음성 · 응답</legend>
+      <label for="voiceSelect">음성</label>
+      <select id="voiceSelect">
+        <option value="Puck">Puck (기본)</option>
+        <option value="Charon">Charon</option>
+        <option value="Kore">Kore</option>
+        <option value="Fenrir">Fenrir</option>
+        <option value="Aoede">Aoede</option>
+      </select>
+      <label for="temperature">Temperature: <span id="temperatureValue">1.0</span></label>
+      <input type="range" id="temperature" min="0.1" max="2.0" step="0.1" value="1.0" />
+      <label for="volume">출력 볼륨: <span id="volumeValue">80%</span></label>
+      <input type="range" id="volume" min="0" max="100" value="80" />
+    </fieldset>
+
+    <fieldset>
+      <legend>전사 (transcription)</legend>
+      <div class="check">
+        <input type="checkbox" id="enableInputTranscription" checked />
+        <label for="enableInputTranscription">입력 전사 (내 음성)</label>
+      </div>
+      <div class="check">
+        <input type="checkbox" id="enableOutputTranscription" checked />
+        <label for="enableOutputTranscription">출력 전사 (Gemini 응답)</label>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>커스텀 도구</legend>
+      <div class="check">
+        <input type="checkbox" id="enableAlertTool" checked />
+        <label for="enableAlertTool">알림창 표시</label>
+      </div>
+      <div class="check">
+        <input type="checkbox" id="enableCssStyleTool" checked />
+        <label for="enableCssStyleTool">CSS 스타일 주입</label>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>음성 감지</legend>
+      <div class="check">
+        <input type="checkbox" id="disableActivityDetection" />
+        <label for="disableActivityDetection">자동 음성 감지 끄기</label>
+      </div>
+      <label for="silenceDuration">침묵 길이 (ms)</label>
+      <input type="number" id="silenceDuration" value="500" min="500" max="10000" step="100" />
+      <label for="prefixPadding">시작 여유 (ms)</label>
+      <input type="number" id="prefixPadding" value="500" min="0" max="2000" step="100" />
+      <label for="endSpeechSensitivity">말 끝 민감도</label>
+      <select id="endSpeechSensitivity">
+        <option value="END_SENSITIVITY_UNSPECIFIED" selected>기본</option>
+        <option value="END_SENSITIVITY_HIGH">높음 (빠른 종료)</option>
+        <option value="END_SENSITIVITY_LOW">낮음 (오래 대기)</option>
+      </select>
+      <label for="startSpeechSensitivity">말 시작 민감도</label>
+      <select id="startSpeechSensitivity">
+        <option value="START_SENSITIVITY_UNSPECIFIED" selected>기본</option>
+        <option value="START_SENSITIVITY_HIGH">높음 (빠른 감지)</option>
+        <option value="START_SENSITIVITY_LOW">낮음 (필터링 강화)</option>
+      </select>
+      <label for="activityHandling">활동 처리</label>
+      <select id="activityHandling">
+        <option value="ACTIVITY_HANDLING_UNSPECIFIED" selected>기본 (끼어들기)</option>
+        <option value="START_OF_ACTIVITY_INTERRUPTS">끼어들기 (barge-in)</option>
+        <option value="NO_INTERRUPTION">끼어들기 없음</option>
+      </select>
+    </fieldset>
+
+    <fieldset>
+      <legend>입력 기기</legend>
+      <label for="micSelect">마이크</label>
+      <select id="micSelect">
+        <option value="">기본 마이크</option>
+      </select>
+      <label for="cameraSelect">카메라</label>
+      <select id="cameraSelect">
+        <option value="">기본 카메라</option>
+      </select>
+    </fieldset>
+
+    <fieldset>
+      <legend>영상 · 화면 (보조)</legend>
+      <div class="media-btns">
+        <button id="startVideoBtn">Start Video</button>
+        <button id="startScreenBtn">Share Screen</button>
+      </div>
+      <video id="videoPreview" autoplay playsinline muted hidden width="400"></video>
+    </fieldset>
+
+    <fieldset>
+      <legend>텍스트로 입력</legend>
+      <div class="media-btns">
+        <input type="text" id="chatInput" placeholder="메시지 입력..." autocomplete="off" />
+        <button id="sendBtn" style="flex:0 0 64px">전송</button>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>디버그</legend>
+      <label>상태 로그</label>
+      <pre id="debugInfo">Ready to connect...</pre>
+      <details id="setupJsonSection" style="display:none; margin-top:10px">
+        <summary style="cursor:pointer; font-size:0.8rem; color:var(--muted-2)">Setup Message JSON</summary>
+        <pre id="setupJsonDisplay"></pre>
+      </details>
+    </fieldset>
+  </aside>
+
+  <!-- 라이브러리 로드 (원본 그대로 유지) -->
   <script src="geminilive.js"></script>
   <script src="mediaUtils.js"></script>
   <script src="tools.js"></script>
