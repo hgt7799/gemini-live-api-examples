@@ -22,11 +22,8 @@ HTTP_PORT = 8000  # Port for HTTP server
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
 # === 번역 설정 (Live Translate) ===
-# 토큰에 번역 모델 + 도착 언어를 박아서 발급한다.
-# 도착 언어를 바꾸려면 TARGET_LANGUAGE_CODE 만 수정하면 됨. (예: "en", "ja", "zh-Hans")
+# 토큰에는 모델만 고정하고 도착 언어는 클라이언트에서 설정(unlock 방식).
 TRANSLATE_MODEL = "gemini-3.5-live-translate-preview"
-TARGET_LANGUAGE_CODE = "en"   # 한국어로 말하면 영어로 번역
-ECHO_TARGET_LANGUAGE = True    # 입력이 이미 영어면 그대로 따라 말함
 
 # Initialize the Gemini GenAI client
 if not GEMINI_API_KEY:
@@ -38,14 +35,13 @@ else:
 
 
 async def get_ephemeral_token(request):
-    """Generates an ephemeral token for the Gemini Live API (translation mode)."""
+    """Generates an ephemeral token for the Gemini Live API (translation mode, unlock)."""
     try:
         now = datetime.datetime.now(tz=datetime.timezone.utc)
         expire_time = now + datetime.timedelta(minutes=30)
 
-        # Create an ephemeral token LOCKED to the translation model + target language.
-        # 공식 문서(Live Translate) 기준 — live_connect_constraints 안에
-        # translation_config 를 넣어 토큰에 번역 설정을 고정한다.
+        # Unlock 방식: 모델만 고정, translation_config는 클라이언트에서 설정.
+        # lock_additional_fields: [] → config 안의 추가 필드를 잠그지 않음.
         token = client.auth_tokens.create(
             config={
                 "uses": 1,
@@ -57,11 +53,8 @@ async def get_ephemeral_token(request):
                         "response_modalities": ["AUDIO"],
                         "input_audio_transcription": {},
                         "output_audio_transcription": {},
-                        "translation_config": {
-                            "target_language_code": TARGET_LANGUAGE_CODE,
-                            "echo_target_language": ECHO_TARGET_LANGUAGE,
-                        },
                     },
+                    "lock_additional_fields": [],
                 },
                 "http_options": {"api_version": "v1alpha"},
             }
@@ -135,7 +128,7 @@ async def main():
 ║                                                            ║
 ║  📱 Web Interface: http://localhost:{HTTP_PORT:<5}                   ║
 ║  🔑 API Endpoint:  POST /api/token                         ║
-║  🌐 Translation:   ko → {TARGET_LANGUAGE_CODE:<5}                            ║
+║  🌐 Translation:   unlock (client sets target)     ║
 ║                                                            ║
 ║  Instructions:                                             ║
 ║  1. Ensure GEMINI_API_KEY is set in your environment       ║
