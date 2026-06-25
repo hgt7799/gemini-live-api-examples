@@ -461,7 +461,7 @@ function sendMessage() {
 // Add message to chat
 function addMessage(text, type, append = false) {
   // Get all div children (messages)
-  const messages = elements.chatContainer.querySelectorAll("div");
+  const messages = elements.chatContainer.querySelectorAll("div." + type);
   const lastMessage = messages[messages.length - 1];
 
   // Check if we should append to the last message
