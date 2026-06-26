@@ -35,13 +35,19 @@ else:
 
 
 async def get_ephemeral_token(request):
-    """Generates an ephemeral token for the Gemini Live API (translation mode, unlock)."""
+    """Generates an ephemeral token for the Gemini Live API (translation mode).
+    Query params:
+      target - BCP-47 도착 언어 코드 (기본: en)
+      echo   - 입력이 도착 언어면 따라 말하기 (기본: true)
+    """
     try:
         now = datetime.datetime.now(tz=datetime.timezone.utc)
         expire_time = now + datetime.timedelta(minutes=30)
 
-        # Unlock 방식: 모델만 고정, translation_config는 클라이언트에서 설정.
-        # lock_additional_fields: [] → config 안의 추가 필드를 잠그지 않음.
+        # 클라이언트가 도착 언어를 지정, 토큰에 박아서 발급
+        target_lang = request.query.get("target", "en")
+        echo = request.query.get("echo", "true").lower() == "true"
+
         token = client.auth_tokens.create(
             config={
                 "uses": 1,
@@ -53,8 +59,11 @@ async def get_ephemeral_token(request):
                         "response_modalities": ["AUDIO"],
                         "input_audio_transcription": {},
                         "output_audio_transcription": {},
+                        "translation_config": {
+                            "target_language_code": target_lang,
+                            "echo_target_language": echo,
+                        },
                     },
-                    "lock_additional_fields": [],
                 },
                 "http_options": {"api_version": "v1alpha"},
             }

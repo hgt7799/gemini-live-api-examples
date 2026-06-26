@@ -206,7 +206,7 @@
     }
 
     .user-transcript::before {
-      content: "한국어";
+      content: var(--my-lang-label, "한국어");
       display: block;
       font-size: 0.7rem;
       color: var(--ko-label);
@@ -224,7 +224,7 @@
     }
 
     .assistant::before {
-      content: "English";
+      content: var(--partner-lang-label, "English");
       display: block;
       font-size: 0.7rem;
       font-weight: 500;
@@ -323,6 +323,27 @@
     }
 
     .mic-btn:active {
+      transform: scale(.96);
+    }
+
+    .switch-btn {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      border: 1px solid var(--accent-border);
+      background: var(--app);
+      color: var(--accent-strong);
+      font-size: 1.3rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background .15s;
+    }
+
+    .switch-btn:hover {
+      background: var(--accent-soft);
+    }
+
+    .switch-btn:active {
       transform: scale(.96);
     }
 
@@ -543,7 +564,7 @@
     <header class="header">
       <div class="brand">
         <div class="brand-title">라이브 통역</div>
-        <div class="direction">한국어 <span>→</span> English</div>
+        <div id="directionLabel" class="direction">한국어 <span>→</span> English</div>
       </div>
       <div id="connectionStatus" class="status-pill">Not connected</div>
       <label for="uiSettings" class="gear" role="button" aria-label="고급 설정 열기">
@@ -569,8 +590,9 @@
         <button id="connectBtn">연결</button>
         <button id="disconnectBtn">종료</button>
       </div>
+      <button id="switchBtn" class="switch-btn" aria-label="통역 방향 전환">↔</button>
       <button id="startAudioBtn" class="mic-btn" aria-label="마이크 켜기 / 끄기">Start Audio</button>
-      <div class="hint"><b>①</b> 연결한 뒤 &nbsp;<b>②</b> 마이크를 켜고 말하세요</div>
+      <div class="hint"><b>①</b> 연결 → <b>②</b> 마이크 → <b>↔</b> 방향 전환</div>
     </footer>
   </div>
 

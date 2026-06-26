@@ -1,14 +1,41 @@
 /**
  * Main application script for Gemini Live API Demo
  * Handles UI interactions, media streaming, and communication with Gemini API
+ *
+ * 길 2: 세션 1개 + 방향 전환 버튼 (↔)
  */
 
 // Global state
 const state = {
   client: null,
+  myLang: sessionStorage.getItem("myLang") || "ko",
+  partnerLang: sessionStorage.getItem("partnerLang") || "en",
   audio: { streamer: null, player: null, isStreaming: false },
   video: { streamer: null, isStreaming: false },
   screen: { capture: null, isSharing: false },
+};
+
+// 봉인된 타입 추적 (빈 text 1회 → 봉인, 다음 텍스트는 새 카드)
+const sealedTypes = new Set();
+
+// 언어 라벨 맵
+const langLabels = {
+  ko: "한국어",
+  en: "English",
+  ja: "日本語",
+  "zh-Hans": "中文",
+  "zh-Hant": "中文繁",
+  es: "Español",
+  fr: "Français",
+  de: "Deutsch",
+  it: "Italiano",
+  "pt-BR": "Português",
+  vi: "Tiếng Việt",
+  th: "ภาษาไทย",
+  id: "Indonesia",
+  ar: "العربية",
+  hi: "हिन्दी",
+  ru: "Русский",
 };
 
 // DOM element cache
@@ -50,6 +77,8 @@ function initDOM() {
     "debugInfo",
     "setupJsonSection",
     "setupJsonDisplay",
+    "switchBtn",
+    "directionLabel",
   ];
 
   ids.forEach((id) => {
@@ -109,13 +138,25 @@ function updateStatus(elementId, text) {
   }
 }
 
+// 방향 라벨 + 카드 라벨 갱신
+function updateDirectionLabel() {
+  const from = langLabels[state.myLang] || state.myLang;
+  const to = langLabels[state.partnerLang] || state.partnerLang;
+  if (elements.directionLabel) {
+    elements.directionLabel.innerHTML = `${from} <span>→</span> ${to}`;
+  }
+  // 카드 라벨 CSS 변수 갱신 (오른쪽=내 언어, 왼쪽=상대 언어)
+  document.documentElement.style.setProperty("--my-lang-label", `"${from}"`);
+  document.documentElement.style.setProperty("--partner-lang-label", `"${to}"`);
+}
+
 // Connect to Gemini
 async function connect() {
   try {
     updateStatus("connectionStatus", "Fetching ephemeral token...");
 
-    // Fetch token from backend
-    const response = await fetch("/api/token", { method: "POST" });
+    // Fetch token from backend (도착 언어를 파라미터로 전달 → 토큰에 박힘)
+    const response = await fetch(`/api/token?target=${encodeURIComponent(state.partnerLang)}`, { method: "POST" });
     if (!response.ok) {
       throw new Error(`Failed to fetch token: ${response.statusText}`);
     }
@@ -127,7 +168,12 @@ async function connect() {
     // Create GeminiLiveAPI instance
     state.client = new GeminiLiveAPI(token, model);
 
-    // Configure settings
+    // 번역 모드 설정
+    state.client.setUseTranslation(true);
+    state.client.setTargetLanguageCode(state.partnerLang);
+    state.client.setEchoTargetLanguage(true);
+
+    // Configure settings (번역 모드에서는 무시되지만 호환성 유지)
     state.client.systemInstructions = elements.systemInstructions.value;
     state.client.inputAudioTranscription =
       elements.enableInputTranscription.checked;
@@ -188,6 +234,9 @@ async function connect() {
     state.audio.player = new AudioPlayer();
     await state.audio.player.init();
 
+    // 봉인 초기화
+    sealedTypes.clear();
+
     updateStatus("debugInfo", "Connected successfully");
   } catch (error) {
     console.error("Connection failed:", error);
@@ -198,8 +247,13 @@ async function connect() {
 
 // Disconnect
 function disconnect() {
-  if (state.client && state.client.webSocket) {
-    state.client.webSocket.close();
+  if (state.client) {
+    // 콜백 제거: 비동기 onclose가 새 연결을 죽이는 것 방지
+    state.client.onClose = () => {};
+    state.client.onError = () => {};
+    if (state.client.webSocket) {
+      state.client.webSocket.close();
+    }
     state.client = null;
   }
 
@@ -224,6 +278,27 @@ function disconnect() {
   elements.videoPreview.srcObject = null;
 }
 
+// ↔ 방향 전환: 끊고 → 언어 교환 → 재연결
+async function switchDirection() {
+  const temp = state.myLang;
+  state.myLang = state.partnerLang;
+  state.partnerLang = temp;
+
+  updateDirectionLabel();
+
+  // 기존 카드 봉인 (전환 후 새 발화는 새 카드로)
+  sealedTypes.add("user-transcript");
+  sealedTypes.add("assistant");
+
+  // 연결 중이면 끊고 재연결
+  if (state.client) {
+    const wasStreaming = state.audio.isStreaming;
+    disconnect();
+    await connect();
+    if (wasStreaming) await toggleAudio();
+  }
+}
+
 // Handle messages
 function handleMessage(message) {
   updateStatus("debugInfo", `Message: ${message.type}`);
@@ -240,18 +315,28 @@ function handleMessage(message) {
       break;
 
     case MultimodalLiveResponseType.INPUT_TRANSCRIPTION:
-      console.log("Input transcription:", message.data);
-      // 빈 text 조각(번역 모델이 첫 조각 뒤에 계속 보냄)은 화면에 추가하지 않음
-      if (!message.data.finished && message.data.text) {
-        addMessage(message.data.text, "user-transcript", (append = true));
+      if (message.data.text) {
+        console.log("Input transcription:", message.data);
+        // 새 입력 시작 → 이전 번역 카드 봉인 (쌍 끊기)
+        sealedTypes.add("assistant");
+        // 내 음성 원문 → 오른쪽 회색 카드
+        addMessage(message.data.text, "user-transcript", true);
+      } else {
+        // 빈 text → 카드 봉인 (다음 텍스트는 새 카드로)
+        sealedTypes.add("user-transcript");
       }
       break;
 
     case MultimodalLiveResponseType.OUTPUT_TRANSCRIPTION:
-      console.log("Output transcription:", message.data);
-      // 빈 text 조각은 화면에 추가하지 않음
-      if (!message.data.finished && message.data.text) {
-        addMessage(message.data.text, "assistant", (append = true));
+      if (message.data.text) {
+        console.log("Output transcription:", message.data);
+        // 새 번역 시작 → 이전 입력 카드 봉인 (쌍 끊기)
+        sealedTypes.add("user-transcript");
+        // 번역된 텍스트 → 왼쪽 파란 카드
+        addMessage(message.data.text, "assistant", true);
+      } else {
+        // 빈 text → 카드 봉인
+        sealedTypes.add("assistant");
       }
       break;
 
@@ -458,20 +543,19 @@ function sendMessage() {
   }
 }
 
-// Add message to chat
+// Add message to chat (봉인 로직 포함)
 function addMessage(text, type, append = false) {
-  // Get all div children (messages)
   const messages = elements.chatContainer.querySelectorAll("div." + type);
   const lastMessage = messages[messages.length - 1];
 
-  // Check if we should append to the last message
-  if (append && lastMessage && lastMessage.className === type) {
-    // Append to existing message of the same type
+  if (append && lastMessage && !sealedTypes.has(type)) {
+    // 미봉인 → 기존 카드에 이어붙임
     lastMessage.textContent += text;
   } else {
-    // Create new message
+    // 봉인됨 또는 첫 카드 → 새 카드 생성
     const message = createMessage(text, type);
     elements.chatContainer.appendChild(message);
+    sealedTypes.delete(type);
   }
 
   elements.chatContainer.scrollTop = elements.chatContainer.scrollHeight;
@@ -504,6 +588,10 @@ function initEventListeners() {
   elements.volume.addEventListener("input", updateVolume);
   elements.temperature.addEventListener("input", updateTemperature);
 
+  if (elements.switchBtn) {
+    elements.switchBtn.addEventListener("click", switchDirection);
+  }
+
   elements.chatInput.addEventListener("keypress", (e) => {
     if (e.key === "Enter") sendMessage();
   });
@@ -514,5 +602,6 @@ window.addEventListener("DOMContentLoaded", () => {
   initDOM();
   initEventListeners();
   populateMediaDevices();
+  updateDirectionLabel();
   updateStatus("debugInfo", "Application initialized");
 });
